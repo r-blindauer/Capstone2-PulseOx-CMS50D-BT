@@ -7,7 +7,6 @@ import time
 import platform
 import asyncio
 import logging
-import keyboard
 
 # TEST
 import csv
@@ -82,6 +81,7 @@ def process_livedata(epoch, data):
 
     # Handle the case, partial message received in the livedata stream
     i = 0
+    spo2_list = []
     while i < len(msg_buffer):
         msg_decoded = bytearray()
         # New message decoded
@@ -98,25 +98,14 @@ def process_livedata(epoch, data):
                 i = 0  # Reset counter since message popped out
             # Check if one message has been successfully decoded
             if 0 < len(msg_decoded):
-                ['timestamp', 'SpO2']
                 msg = list(msg_decoded)
                 if 0 == msg[1]:
-                    writer.writerow(
-                        {'timestamp': str(epoch), 'SpO2': msg[4]})
+                    pass
                 else:
-                    writer.writerow(
-                        {'timestamp': str(epoch), 'SpO2': msg[4]})
-            # if 0 < len(msg_decoded):
-            #     ['timestamp', 'header', 'type', 'byte1', 'byte2', 'byte3', 'byte4', 'byte5', 'byte6']
-                # if 0 == msg[1]:
-                #     writer.writerow(
-                #         {'timestamp': str(epoch), 'header': msg[0], 'type': msg[1], 'byte1': msg[2], 'byte2': msg[3],
-                #          'byte3': msg[4], 'byte4': msg[5]})
-                # else:
-                #     writer.writerow(
-                #         {'timestamp': str(epoch), 'header': msg[0], 'type': msg[1], 'byte1': msg[2], 'byte2': msg[3],
-                #          'byte3': msg[4], 'byte4': msg[5], 'byte5': msg[6], 'byte6': msg[7]})
-                # print('DECODED : ', msg_decoded.hex().upper())
+                    # Only print the valid SpO2 readings
+                    spo2_val = msg[4]
+                    spo2_list.append(spo2_val)
+                    print('Time:', str(epoch), 'SpO2:', spo2_val)
             else:
                 # Step out loop since no complete message remaining in the buffer
                 break
@@ -140,11 +129,6 @@ async def run_queue_consumer(queue: asyncio.Queue):
             logger.info(f"Received callback data via async queue at {epoch}: {data}")
             process_livedata(epoch, data)
 
-        # press 'q' to exit
-        if keyboard.is_pressed("q"):
-            output_file.close()
-            running_flag = False
-
 
 async def main(address: str):
     queue = asyncio.Queue()
@@ -155,7 +139,8 @@ async def main(address: str):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    # To have logging
+    #logging.basicConfig(level=logging.INFO)
     asyncio.run(
         main(
             sys.argv[1] if len(sys.argv) > 1 else ADDRESS
