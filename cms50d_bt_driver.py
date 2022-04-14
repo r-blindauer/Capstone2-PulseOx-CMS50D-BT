@@ -8,18 +8,9 @@ import platform
 import asyncio
 import logging
 
-# TEST
-import csv
-
-# output_file = open("C:\\Users\\nringels\PycharmProjects\\pythonCMD50D-BT\\reverse\\test_log_out.csv", 'w', newline='')
-output_file = open("C:\\Users\\blind\\Documents\\College\Computer Science\\Capstone1\\DataConnection\\test_log1.csv",
-                   'w', newline='')
-
-# create the csv writer
-#fieldnames = ['timestamp', 'header', 'type', 'byte1', 'byte2', 'byte3', 'byte4', 'byte5', 'byte6']
-fieldnames = ['timestamp', 'SpO2']
-writer = csv.DictWriter(output_file, fieldnames=fieldnames)
-writer.writeheader()
+output_file = open(
+    "C:\\Users\\blind\\Documents\\College\Computer Science\\Capstone1\\DataConnection\\PulseOx_Output.txt",
+    'w')
 
 # CMS50D-BT Message Protocol format
 CMS_LIVEDATA_PACKET_HEADER = 235  # 0xEB
@@ -47,6 +38,7 @@ async def run_ble_client(address: str, queue: asyncio.Queue):
     async def callback_handler(sender, data):
         await queue.put((time.time(), data))
 
+    # added timeout
     async with BleakClient(address) as client:
         logger.info(f"Connected: {client.is_connected}")
         await client.start_notify("0000ff02-0000-1000-8000-00805f9b34fb", callback_handler)
@@ -81,7 +73,10 @@ def process_livedata(epoch, data):
 
     # Handle the case, partial message received in the livedata stream
     i = 0
-    spo2_list = []
+
+    # Create output text file
+    f = open("PulseOx_Output.txt", "w")
+
     while i < len(msg_buffer):
         msg_decoded = bytearray()
         # New message decoded
@@ -104,8 +99,10 @@ def process_livedata(epoch, data):
                 else:
                     # Only print the valid SpO2 readings
                     spo2_val = msg[4]
-                    spo2_list.append(spo2_val)
-                    print('Time:', str(epoch), 'SpO2:', spo2_val)
+                    # Only valid readings
+                    if spo2_val > 50 and spo2_val < 100:
+                        output_file.write(str(spo2_val) + "\n")
+                        print('Time:', str(epoch), 'SpO2:', spo2_val)
             else:
                 # Step out loop since no complete message remaining in the buffer
                 break
@@ -116,9 +113,13 @@ def process_livedata(epoch, data):
 
 async def run_queue_consumer(queue: asyncio.Queue):
     global running_flag
-    while True:
+
+    t_end = time.time() + 20
+    #while True:
+    while time.time() < t_end:
         # Use await asyncio.wait_for(queue.get(), timeout=1.0) if you want a timeout for getting data.
         epoch, data = await queue.get()
+        #epoch, data = await asyncio.wait_for(queue.get(), timeout-self.)
 
         if data is None:
             logger.info(
@@ -129,18 +130,26 @@ async def run_queue_consumer(queue: asyncio.Queue):
             logger.info(f"Received callback data via async queue at {epoch}: {data}")
             process_livedata(epoch, data)
 
+    print("Done collecting data")
+    output_file.close()
+    running_flag = False
+
 
 async def main(address: str):
     queue = asyncio.Queue()
+    # Connect to BL device
     client_task = run_ble_client(address, queue)
+    # Get information
     consumer_task = run_queue_consumer(queue)
+    # await asyncio.wait_for(asyncio.gather(client_task, consumer_task)
     await asyncio.gather(client_task, consumer_task)
+    print("main method done")
     logger.info("Main method done.")
 
 
 if __name__ == "__main__":
     # To have logging
-    #logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO)
     asyncio.run(
         main(
             sys.argv[1] if len(sys.argv) > 1 else ADDRESS
